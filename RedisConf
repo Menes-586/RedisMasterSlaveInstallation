@@ -1,0 +1,613 @@
+# Redis Replication Kurulumu (1 Master + 2 Replica) - Azure Ubuntu VM
+
+Bu dokümanda Azure üzerinde çalışan üç Ubuntu sanal makinesi üzerinde Redis Replication kurulumu adım adım anlatılmaktadır.
+
+## Topoloji
+
+```
+                 Azure Virtual Network
+        --------------------------------------
+
+        redis-master      10.0.1.4
+              |
+      -------------------
+      |                 |
+      |                 |
+redis-slave1      redis-slave2
+ 10.0.1.5          10.0.1.6
+```
+
+- 1 adet Redis Master
+- 2 adet Redis Replica
+- Aynı VNet
+- Aynı Subnet
+- Private IP üzerinden haberleşme
+- Port: **6379**
+
+---
+
+# Ön Gereksinimler
+
+- Azure üzerinde 3 adet Ubuntu VM
+- VM'ler aynı VNet içerisinde olmalıdır.
+- VM'ler birbirlerini Private IP ile görebilmelidir.
+- Network Security Group (NSG) üzerinde TCP 6379 portu açık olmalıdır.
+- SSH erişimi sağlanmalıdır.
+
+Örnek makine isimleri
+
+| Makine | Private IP |
+|---------|------------|
+| redis-master | 10.0.1.4 |
+| redis-slave1 | 10.0.1.5 |
+| redis-slave2 | 10.0.1.6 |
+
+---
+
+# Adım 1 - Redis Kurulumu
+
+Bu adımlar **üç makinede de** uygulanacaktır.
+
+## Paket listesini güncelle
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+```
+
+---
+
+## Redis'i kur
+
+```bash
+sudo apt install redis-server -y
+```
+
+---
+
+## Kurulumu doğrula
+
+```bash
+redis-server --version
+```
+
+Örnek çıktı
+
+```
+Redis server v=8.x.x
+```
+
+---
+
+## Redis servisini kontrol et
+
+```bash
+sudo systemctl status redis-server
+```
+
+veya
+
+```bash
+sudo systemctl status redis
+```
+
+Beklenen çıktı
+
+```
+Active: active (running)
+```
+
+Bu çıktı Redis servisinin başarıyla çalıştığını gösterir.
+
+---
+
+# Adım 2 - Master Sunucusunu Yapılandırma
+
+Sadece **redis-master** makinesinde uygulanacaktır.
+
+Redis konfigürasyon dosyasını açın.
+
+```bash
+sudo nano /etc/redis/redis.conf
+```
+
+---
+
+## bind ayarı
+
+Bulun
+
+```conf
+bind 127.0.0.1 -::1
+```
+
+Değiştirin
+
+```conf
+bind 0.0.0.0
+```
+
+### Açıklama
+
+Varsayılan durumda Redis yalnızca localhost üzerinden bağlantı kabul eder.
+
+```
+Client
+   |
+localhost
+   |
+Redis
+```
+
+Bu ayar değiştirildiğinde aynı ağdaki diğer makineler de Redis'e bağlanabilir.
+
+```
+redis-slave1
+        |
+redis-slave2
+        |
+redis-master
+```
+
+---
+
+## protected-mode
+
+Bulun
+
+```conf
+protected-mode yes
+```
+
+Değiştirin
+
+```conf
+protected-mode no
+```
+
+### Açıklama
+
+Protected Mode, Redis'in dış bağlantılara karşı güvenlik mekanizmasıdır.
+
+Lab ortamında devre dışı bırakıyoruz.
+
+> **Production ortamında önerilmez.**
+
+---
+
+## Port kontrolü
+
+Bulun
+
+```conf
+port 6379
+```
+
+Varsayılan değer kullanılacaktır.
+
+---
+
+## Append Only File (AOF)
+
+Bulun
+
+```conf
+appendonly no
+```
+
+Değiştirin
+
+```conf
+appendonly yes
+```
+
+### Neden?
+
+Redis normalde bellekte çalışır.
+
+AOF etkinleştirildiğinde yapılan tüm yazma işlemleri diske kaydedilir.
+
+Örneğin
+
+```
+SET isim Enes
+SET yas 24
+DEL yas
+HSET user name Enes
+```
+
+Bu komutların tamamı appendonly.aof dosyasına yazılır.
+
+Makine yeniden başlatıldığında Redis bu dosyayı okuyarak verileri geri yükler.
+
+Bu sayede veri kaybı riski önemli ölçüde azalır.
+
+---
+
+## Redis'i yeniden başlat
+
+```bash
+sudo systemctl restart redis-server
+```
+
+---
+
+## Redis'in çalıştığını doğrula
+
+```bash
+redis-cli ping
+```
+
+Beklenen çıktı
+
+```
+PONG
+```
+
+---
+
+# Adım 3 - Ağ Bağlantısını Test Et
+
+Replica sunucularından Master'a bağlantıyı test edin.
+
+Örneğin Slave1 üzerinde
+
+```bash
+telnet 10.0.1.4 6379
+```
+
+veya
+
+```bash
+nc -zv 10.0.1.4 6379
+```
+
+Beklenen çıktı
+
+```
+succeeded
+```
+
+Eğer bağlantı başarısız olursa aşağıdakileri kontrol edin.
+
+- NSG
+- Firewall
+- Private IP
+- Redis bind ayarı
+- Redis servis durumu
+
+---
+
+# Adım 4 - Replica1 Yapılandırması
+
+redis-slave1 üzerinde
+
+```bash
+sudo nano /etc/redis/redis.conf
+```
+
+Aşağıdaki ayarları yapın.
+
+```conf
+bind 0.0.0.0
+
+protected-mode no
+
+appendonly yes
+```
+
+Dosyanın en altına ekleyin
+
+```conf
+replicaof 10.0.1.4 6379
+```
+
+Buradaki IP adresi Master'ın Private IP adresidir.
+
+Kaydedin.
+
+Redis'i yeniden başlatın.
+
+```bash
+sudo systemctl restart redis-server
+```
+
+---
+
+# Adım 5 - Replica2 Yapılandırması
+
+redis-slave2 üzerinde aynı işlemleri uygulayın.
+
+```conf
+bind 0.0.0.0
+
+protected-mode no
+
+appendonly yes
+
+replicaof 10.0.1.4 6379
+```
+
+Redis'i yeniden başlatın.
+
+```bash
+sudo systemctl restart redis-server
+```
+
+---
+
+# Adım 6 - Replication Durumunu Kontrol Et
+
+## Master
+
+```bash
+redis-cli INFO replication
+```
+
+Örnek çıktı
+
+```
+role:master
+
+connected_slaves:2
+
+slave0
+
+ip=10.0.1.5
+
+slave1
+
+ip=10.0.1.6
+```
+
+En önemli alan
+
+```
+connected_slaves:2
+```
+
+Bu değer iki Replica'nın başarıyla bağlandığını gösterir.
+
+---
+
+## Replica
+
+```bash
+redis-cli INFO replication
+```
+
+Örnek çıktı
+
+```
+role:slave
+
+master_host:10.0.1.4
+
+master_link_status:up
+```
+
+Kontrol edilmesi gereken alan
+
+```
+master_link_status:up
+```
+
+Bu değer Replica'nın Master ile başarılı şekilde haberleştiğini gösterir.
+
+---
+
+# Adım 7 - Replication Testi
+
+Master üzerinde
+
+```bash
+redis-cli
+```
+
+Veri ekleyelim.
+
+```bash
+SET isim Enes
+SET sehir Ankara
+SET yas 24
+```
+
+---
+
+Replica1 üzerinde
+
+```bash
+redis-cli
+```
+
+```bash
+GET isim
+```
+
+Beklenen çıktı
+
+```
+"Enes"
+```
+
+```bash
+GET sehir
+```
+
+```
+"Ankara"
+```
+
+```bash
+GET yas
+```
+
+```
+"24"
+```
+
+Aynı sonuçlar Replica2 üzerinde de görülmelidir.
+
+---
+
+# Adım 8 - Replica'ya Yazmayı Deneyelim
+
+Replica üzerinde
+
+```bash
+SET test 123
+```
+
+Beklenen çıktı
+
+```
+READONLY You can't write against a read only replica.
+```
+
+Bu hata beklenen davranıştır.
+
+Redis Replication mimarisinde yalnızca Master yazma işlemlerini kabul eder.
+
+Replica sunucular yalnızca okuma amacıyla kullanılır.
+
+---
+
+# Replication Nasıl Çalışır?
+
+Master üzerinde
+
+```bash
+SET isim Enes
+```
+
+komutu çalıştırıldığında aşağıdaki süreç gerçekleşir.
+
+```
+            SET isim Enes
+                    |
+                    |
+               Redis Master
+                    |
+        Replication Stream
+             /          \
+            /            \
+           /              \
+   redis-slave1      redis-slave2
+```
+
+İşleyiş sırası
+
+1. Client Master'a bağlanır.
+2. Master veriyi RAM'e yazar.
+3. Aynı komutu Replication Stream üzerinden Replica'lara gönderir.
+4. Replica komutu çalıştırır.
+5. Her Replica belleğini günceller.
+6. Tüm Replica'lar aynı veriye sahip olur.
+
+---
+
+# Replication Özellikleri
+
+- Asenkron çalışır.
+- Master yazma işlemlerini kabul eder.
+- Replica'lar yalnızca okuma yapar.
+- Replica'lar Master'dan sürekli veri alır.
+- Master üzerindeki tüm değişiklikler Replica'lara otomatik aktarılır.
+- Replica'lar yüksek erişilebilirlik ve ölçeklenebilirlik sağlar.
+
+---
+
+# Faydalı Redis Komutları
+
+Servis Durumu
+
+```bash
+sudo systemctl status redis-server
+```
+
+Servisi Başlat
+
+```bash
+sudo systemctl start redis-server
+```
+
+Servisi Durdur
+
+```bash
+sudo systemctl stop redis-server
+```
+
+Servisi Yeniden Başlat
+
+```bash
+sudo systemctl restart redis-server
+```
+
+Redis CLI
+
+```bash
+redis-cli
+```
+
+Replication Bilgisi
+
+```bash
+INFO replication
+```
+
+Bellek Bilgisi
+
+```bash
+INFO memory
+```
+
+Sunucu Bilgisi
+
+```bash
+INFO server
+```
+
+Persistence Bilgisi
+
+```bash
+INFO persistence
+```
+
+Bağlı İstemciler
+
+```bash
+CLIENT LIST
+```
+
+---
+
+# Sonuç
+
+Bu doküman sonunda aşağıdaki yapı başarıyla kurulmuş olacaktır.
+
+```
+                     Azure VNet
+
+                 +----------------+
+                 | redis-master   |
+                 | 10.0.1.4       |
+                 +--------+-------+
+                          |
+          ----------------+----------------
+          |                               |
+          |                               |
++----------------------+        +----------------------+
+| redis-slave1         |        | redis-slave2         |
+| 10.0.1.5             |        | 10.0.1.6             |
+| Read Only Replica    |        | Read Only Replica    |
++----------------------+        +----------------------+
+```
+
+Bu mimari sayesinde:
+
+- Veriler otomatik olarak Replica sunuculara kopyalanır.
+- Replica sunucular üzerinden okuma yükü dağıtılabilir.
+- Veri kaybı riski AOF sayesinde azaltılır.
+- Yüksek erişilebilirlik için temel Redis Replication altyapısı oluşturulmuş olur.
+
+> **Not:** Bu yapı yüksek erişilebilirlik için ilk adımdır. Otomatik failover desteği bulunmaz. Otomatik Master seçimi ve kesintisiz hizmet için Redis Sentinel veya Redis Cluster yapılandırması gereklidir.
