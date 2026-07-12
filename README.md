@@ -40,4 +40,17 @@ masterauth MyStrongPassword123! # replica redislerde bunlari yapilandirman gerek
 sentinel auth-pass mymaster MyStrongPassword123! # sentinelde ayni sekilde bilmesi gerekiyor ... 
 
 
+# Redis ve Sentinelin kaldirilmasi 
+
+sudo systemctl stop redis-server
+sudo systemctl stop redis-sentinel
+sudo systemctl disable redis-server
+sudo systemctl disable redis-sentinel
+sudo apt purge -y redis-server redis-sentinel
+
+# kalan dosyalari sil 
+sudo rm -rf /etc/redis
+sudo rm -rf /var/lib/redis
+sudo rm -rf /var/log/redis
+sudo rm -rf /run/redis
 
