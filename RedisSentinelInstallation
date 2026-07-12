@@ -1,0 +1,15 @@
+
+# 1 master 2 slave olan yapida sentinel yapisini kuracagiz 
+
+| Komut                                       | Ne işe yarar?                         |
+| ------------------------------------------- | ------------------------------------- |
+| `SENTINEL masters`                          | Tüm Master'ları listeler              |
+| `SENTINEL master mymaster`                  | Master detaylarını gösterir           |
+| `SENTINEL get-master-addr-by-name mymaster` | Güncel Master IP'sini verir           |
+| `SENTINEL replicas mymaster`                | Replica'ları listeler                 |
+| `SENTINEL sentinels mymaster`               | Sentinel düğümlerini listeler         |
+| `SENTINEL ckquorum mymaster`                | Quorum durumunu kontrol eder          |
+| `SENTINEL MYID`                             | Sentinel kimliğini gösterir           |
+| `SENTINEL FAILOVER mymaster`                | Manuel failover başlatır              |
+| `SENTINEL RESET mymaster`                   | Master durumunu sıfırlar              |
+| `INFO Sentinel`                             | Sentinel çalışma bilgilerini gösterir |
