@@ -13,3 +13,7 @@
 | `SENTINEL FAILOVER mymaster`                | Manuel failover başlatır              |
 | `SENTINEL RESET mymaster`                   | Master durumunu sıfırlar              |
 | `INFO Sentinel`                             | Sentinel çalışma bilgilerini gösterir |
+
+
+# bu komutu kullanip detayli sekilde inceleyebilirsin ...
+SENTINEL HELP 
