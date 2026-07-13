@@ -54,3 +54,5 @@ sudo rm -rf /var/lib/redis
 sudo rm -rf /var/log/redis
 sudo rm -rf /run/redis
 
+# Replicalar her zaman master ile ayni datalari tutar bunu sakin unutma ... 
+Replica'nın amacı veri saklamak değil, master'ın güncel durumunu yansıtmaktır.
