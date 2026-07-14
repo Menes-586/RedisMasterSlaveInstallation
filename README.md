@@ -73,5 +73,8 @@ sentinel current-epoch 2
 
 <img width="1494" height="790" alt="image" src="https://github.com/user-attachments/assets/ceb31f7b-394d-4bde-a86f-d55bbda06694" />
 
+# redis useri failoverlarda ve diger sentinel kesiflerinde /etc/redis/sentinel.conf dosyasina yazmak ister 
+bunu yapabilmesi icin redis useri icin /etc/redis folderinde yazma izni olmasi gerekiyor bu hatanin nedeni budur 
+
 
 
